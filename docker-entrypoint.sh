@@ -1,27 +1,31 @@
 #!/bin/bash
-# VERSION 0.2.3 by @d3vilh@github.com aka Mr. Philipp
+#VERSION 0.2.3 by @d3vilh@github.com aka Mr. Philipp
 set -e
 
-# Variables
+#Variables
 EASY_RSA=/usr/share/easy-rsa
 OPENVPN_DIR=/etc/openvpn
 echo "EasyRSA path: $EASY_RSA OVPN path: $OPENVPN_DIR"
 
 if [[ ! -f $OPENVPN_DIR/pki/ca.crt ]]; then
-    export EASYRSA_BATCH=1
+    export EASYRSA_BATCH=1 # see https://superuser.com/questions/1331293/easy-rsa-v3-execute-build-ca-and-gen-req-silently
     cd $EASY_RSA
 
+    # Building the CA
     echo 'Setting up public key infrastructure...'
     $EASY_RSA/easyrsa init-pki
 
+    # Copy easy-rsa variables
     cp $OPENVPN_DIR/config/easy-rsa.vars $EASY_RSA/pki/vars
 
+    # Listing env parameters:
     echo "Following EASYRSA variables will be used:"
     cat $EASY_RSA/pki/vars | awk '{$1=""; print $0}';
 
-    echo 'Generating certificate authority...'
+    echo 'Generating ertificate authority...'
     $EASY_RSA/easyrsa build-ca nopass
 
+    # Creating the Server Certificate, Key, and Encryption Files
     echo 'Creating the Server Certificate...'
     $EASY_RSA/easyrsa gen-req server nopass
 
@@ -38,11 +42,14 @@ if [[ ! -f $OPENVPN_DIR/pki/ca.crt ]]; then
     $EASY_RSA/easyrsa gen-crl
     chmod +r $EASY_RSA/pki/crl.pem
 
+    # Copy to mounted volume
     cp -r $EASY_RSA/pki/. $OPENVPN_DIR/pki
 else
+
     echo 'PKI already set up.'
 fi
 
+# Listing env parameters:
 echo "Following EASYRSA variables were set during CA init:"
 cat $OPENVPN_DIR/pki/vars | awk '{$1=""; print $0}';
 
@@ -54,7 +61,7 @@ fi
 
 echo 'Configuring networking rules...'
 if ! grep -q 'net.ipv4.ip_forward=1' /etc/sysctl.conf; then
-  echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
+  echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf; 
   echo 'IP forwarding configuration now applied:'
 else
   echo 'IP forwarding configuration already applied:'
@@ -85,26 +92,6 @@ echo 'IPT MASQ Chains:'
 iptables -t nat -L | grep MASQ
 echo 'IPT FWD Chains:'
 iptables -v -x -n -L | grep DROP 
-
-### ✅ Inject subnet values from env into old-server.conf and/or server.conf
-for CONF_FILE in "$OPENVPN_DIR/config/old-server.conf" "$OPENVPN_DIR/server.conf"; do
-    if [ -f "$CONF_FILE" ]; then
-        echo "Injecting subnets into $CONF_FILE"
-        
-        TRUST_BASE=$(echo "$TRUST_SUB" | cut -d'/' -f1)
-        GUEST_BASE=$(echo "$GUEST_SUB" | cut -d'/' -f1)
-        HOME_BASE=$(echo "$HOME_SUB" | cut -d'/' -f1)
-
-        sed -i "s|^server .*|server ${TRUST_BASE} 255.255.255.0|" "$CONF_FILE"
-        sed -i "s|^route .*|route ${GUEST_BASE} 255.255.255.0|" "$CONF_FILE"
-        sed -i 's|^push "route .*|push "route '"${HOME_BASE}"' 255.255.255.0"|' "$CONF_FILE"
-
-        echo "✅ Updated subnet lines in $CONF_FILE:"
-        grep -E '^(server|route|push "route)' "$CONF_FILE"
-    else
-        echo "Skipping $CONF_FILE — file does not exist."
-    fi
-done
 
 echo 'Start openvpn process...'
 /usr/sbin/openvpn --cd $OPENVPN_DIR --script-security 2 --config $OPENVPN_DIR/server.conf

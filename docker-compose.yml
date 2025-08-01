@@ -3,14 +3,14 @@ version: "3.5"
 services:
   openvpn:
     container_name: openvpn
-    image: kkpkishan/emcpl-vpn:server
+    image: d3vilh/openvpn-server:latest
     privileged: true
-    ports: 
+    ports:
       - "1194:1194/udp"
     environment:
-      TRUST_SUB: ${TRUST_SUB}
-      GUEST_SUB: ${GUEST_SUB}
-      HOME_SUB: ${HOME_SUB}
+      TRUST_SUB: "${TRUST_SUB}"
+      GUEST_SUB: "${GUEST_SUB}"
+      HOME_SUB: "${HOME_SUB}"
     volumes:
       - ./pki:/etc/openvpn/pki
       - ./clients:/etc/openvpn/clients
@@ -28,10 +28,10 @@ services:
 
   openvpn-ui:
     container_name: openvpn-ui
-    image: kkpkishan/emcpl-vpn:latest
+    image: d3vilh/openvpn-ui:latest
     environment:
-      OPENVPN_ADMIN_USERNAME: ${OPENVPN_ADMIN_USERNAME}
-      OPENVPN_ADMIN_PASSWORD: ${OPENVPN_ADMIN_PASSWORD}
+      - OPENVPN_ADMIN_USERNAME=${OPENVPN_ADMIN_USERNAME}
+      - OPENVPN_ADMIN_PASSWORD=${OPENVPN_ADMIN_PASSWORD}
     privileged: true
     ports:
       - "8080:8080/tcp"
@@ -41,3 +41,4 @@ services:
       - ./pki:/usr/share/easy-rsa/pki
       - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: always
+
